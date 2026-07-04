@@ -38,10 +38,10 @@ public sealed class ParcelForm : Form
         var btnNew = new Button { Left = 820, Top = 18, Width = 80, Text = "Yeni" };
         btnNew.Click += (_, _) => ClearForm();
         Controls.Add(btnNew);
-        var btnAdd = new Button { Left = 690, Top = 18, Width = 120, Text = "Kaydet" };
+        var btnAdd = new Button { Left = 690, Top = 53, Width = 100, Text = "Kaydet" };
         btnAdd.Click += (_, _) => SaveParcel();
         Controls.Add(btnAdd);
-        var btnClose = new Button { Left = 690, Top = 53, Width = 210, Text = "Cik" };
+        var btnClose = new Button { Left = 800, Top = 53, Width = 100, Text = "Cik" };
         btnClose.Click += (_, _) => Close();
         Controls.Add(btnClose);
         Controls.Add(grid);
