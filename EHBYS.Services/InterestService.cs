@@ -10,12 +10,12 @@ public static class InterestService
         }
 
         var months = ((asOf.Year - dueDate.Year) * 12) + asOf.Month - dueDate.Month;
-        if (asOf.Day < dueDate.Day)
+        if (asOf.Day > dueDate.Day)
         {
-            months--;
+            months++;
         }
 
-        months = Math.Max(0, months);
+        months = Math.Max(1, months);
         var total = principal * (decimal)Math.Pow((double)(1 + monthlyRate), months);
         return Math.Round(total, 2, MidpointRounding.AwayFromZero);
     }
