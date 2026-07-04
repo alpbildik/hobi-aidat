@@ -23,9 +23,12 @@ public sealed class SettingsForm : Form
         Controls.Add(new Label { Left = 25, Top = 108, Width = 140, Text = "Son odeme gunu" });
         Controls.Add(numDueDay);
 
-        var btnSave = new Button { Left = 170, Top = 145, Width = 120, Text = "Kaydet" };
-        btnSave.Click += (_, _) => Save();
+        var btnSave = new Button { Left = 70, Top = 145, Width = 100, Text = "Kaydet" };
+        btnSave.Click += (_, _) => Save(closeAfterSave: false);
         Controls.Add(btnSave);
+        var btnSaveClose = new Button { Left = 180, Top = 145, Width = 120, Text = "Kaydet ve Cik" };
+        btnSaveClose.Click += (_, _) => Save(closeAfterSave: true);
+        Controls.Add(btnSaveClose);
         Load += (_, _) => LoadSettings();
     }
 
@@ -43,12 +46,16 @@ public sealed class SettingsForm : Form
         numDueDay.Value = SettingsService.GetDecimal("DueDay", 20);
     }
 
-    private void Save()
+    private void Save(bool closeAfterSave)
     {
         SettingsService.Set("MonthlyAidat", numAidat.Value);
         SettingsService.Set("MonthlyInterestRate", numInterest.Value / 100);
         SettingsService.Set("DueDay", numDueDay.Value);
         LogService.Log("Ayarlar guncellendi.");
         MessageBox.Show("Ayarlar kaydedildi.");
+        if (closeAfterSave)
+        {
+            Close();
+        }
     }
 }

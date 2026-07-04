@@ -31,37 +31,25 @@ public sealed class DebtForm : Form
         table.Columns.Add("Telefon");
         table.Columns.Add("AidatBorc", typeof(decimal));
 
-        var rate = SettingsService.GetDecimal("MonthlyInterestRate", 0.07m);
         using var cmd = new SQLiteCommand("""
-            SELECT p.Id, p.ParcelNo, p.OwnerName, p.Phone,
-                   a.Principal, a.PaidAmount, a.DueDate, a.IsPaid
+            SELECT p.Id, p.ParcelNo, p.OwnerName, p.Phone
             FROM Parcels p
-            LEFT JOIN Aidat a ON a.ParcelId = p.Id
             ORDER BY p.ParcelNo
             """, conn);
         using var reader = cmd.ExecuteReader();
-        var totals = new Dictionary<int, DebtRow>();
+        var rows = new List<(int Id, string Parcel, string Owner, string Phone)>();
         while (reader.Read())
         {
-            var id = reader.GetInt32(0);
-            var row = totals.TryGetValue(id, out var existing)
-                ? existing
-                : new DebtRow(reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? "" : reader.GetString(3), 0m);
-
-            if (!reader.IsDBNull(4) && reader.GetInt32(7) == 0)
-            {
-                var principal = Convert.ToDecimal(reader.GetDouble(4)) - Convert.ToDecimal(reader.GetDouble(5));
-                var dueDate = DateTime.Parse(reader.GetString(6));
-                row = row with
-                {
-                    Total = row.Total + InterestService.CalculateCompoundDebt(Math.Max(0, principal), dueDate, DateTime.Today, rate)
-                };
-            }
-
-            totals[id] = row;
+            rows.Add((reader.GetInt32(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? "" : reader.GetString(3)));
         }
+        reader.Close();
 
-        foreach (var item in totals.Values.Where(x => x.Total > 0).OrderByDescending(x => x.Total))
+        var debtRows = rows
+            .Select(row => new DebtRow(row.Parcel, row.Owner, row.Phone, DebtService.CalculateParcelDebt(row.Id, conn)))
+            .Where(row => row.Total > 0)
+            .OrderByDescending(row => row.Total);
+
+        foreach (var item in debtRows)
         {
             table.Rows.Add(item.Parcel, item.Owner, item.Phone, item.Total);
         }

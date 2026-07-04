@@ -29,9 +29,12 @@ public sealed class PaymentForm : Form
         Controls.Add(new Label { Left = 20, Top = 144, Width = 90, Text = "Not" });
         Controls.Add(txtNote);
 
-        var btnSave = new Button { Left = 110, Top = 180, Width = 260, Text = "Tahsilati Kaydet" };
-        btnSave.Click += (_, _) => SavePayment();
+        var btnSave = new Button { Left = 110, Top = 180, Width = 125, Text = "Kaydet" };
+        btnSave.Click += (_, _) => SavePayment(closeAfterSave: false);
         Controls.Add(btnSave);
+        var btnSaveClose = new Button { Left = 245, Top = 180, Width = 125, Text = "Kaydet ve Cik" };
+        btnSaveClose.Click += (_, _) => SavePayment(closeAfterSave: true);
+        Controls.Add(btnSaveClose);
         Load += (_, _) => LoadParcels();
     }
 
@@ -47,7 +50,7 @@ public sealed class PaymentForm : Form
         cmbParcel.ValueMember = "Id";
     }
 
-    private void SavePayment()
+    private void SavePayment(bool closeAfterSave)
     {
         if (!PermissionMatrix.CanTakePayment)
         {
@@ -83,7 +86,15 @@ public sealed class PaymentForm : Form
 
         LogService.Log("Tahsilat kaydedildi: " + amount + " TL");
         MessageBox.Show("Tahsilat kaydedildi.");
-        Close();
+        if (closeAfterSave)
+        {
+            Close();
+        }
+        else
+        {
+            numAmount.Value = 0;
+            txtNote.Clear();
+        }
     }
 
     private static void AllocatePayment(SQLiteConnection conn, SQLiteTransaction tx, int parcelId, decimal amount)

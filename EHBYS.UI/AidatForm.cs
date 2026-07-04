@@ -26,13 +26,16 @@ public sealed class AidatForm : Form
         Controls.Add(new Label { Left = 20, Top = 104, Width = 110, Text = "Vade tarihi" });
         Controls.Add(dueDate);
 
-        var btnCreate = new Button { Left = 310, Top = 20, Width = 170, Height = 35, Text = "Tum Parsellere Olustur" };
-        btnCreate.Click += (_, _) => CreateMonthlyDues();
+        var btnCreate = new Button { Left = 310, Top = 20, Width = 170, Height = 35, Text = "Kaydet" };
+        btnCreate.Click += (_, _) => CreateMonthlyDues(closeAfterSave: false);
         Controls.Add(btnCreate);
 
         var btnRefresh = new Button { Left = 310, Top = 65, Width = 170, Height = 35, Text = "Listeyi Yenile" };
         btnRefresh.Click += (_, _) => LoadRows();
         Controls.Add(btnRefresh);
+        var btnSaveClose = new Button { Left = 500, Top = 20, Width = 170, Height = 35, Text = "Kaydet ve Cik" };
+        btnSaveClose.Click += (_, _) => CreateMonthlyDues(closeAfterSave: true);
+        Controls.Add(btnSaveClose);
 
         Controls.Add(grid);
         Load += (_, _) =>
@@ -44,7 +47,7 @@ public sealed class AidatForm : Form
         };
     }
 
-    private void CreateMonthlyDues()
+    private void CreateMonthlyDues(bool closeAfterSave)
     {
         if (string.IsNullOrWhiteSpace(txtPeriod.Text) || numAmount.Value <= 0)
         {
@@ -94,6 +97,10 @@ public sealed class AidatForm : Form
         LogService.Log("Aidat tahakkuku olusturuldu: " + period);
         MessageBox.Show("Aidat tahakkuku olusturuldu.");
         LoadRows();
+        if (closeAfterSave)
+        {
+            Close();
+        }
     }
 
     private void LoadRows()

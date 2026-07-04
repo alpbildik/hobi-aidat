@@ -27,14 +27,17 @@ public sealed class ParcelForm : Form
         Controls.Add(new Label { Left = 550, Top = 24, Width = 60, Text = "Telefon" });
         Controls.Add(txtPhone);
 
-        var btnAdd = new Button { Left = 780, Top = 18, Width = 70, Text = "Ekle" };
-        btnAdd.Click += (_, _) => AddParcel();
+        var btnAdd = new Button { Left = 780, Top = 18, Width = 70, Text = "Kaydet" };
+        btnAdd.Click += (_, _) => AddParcel(closeAfterSave: false);
         Controls.Add(btnAdd);
+        var btnSaveClose = new Button { Left = 650, Top = 46, Width = 200, Text = "Kaydet ve Cik" };
+        btnSaveClose.Click += (_, _) => AddParcel(closeAfterSave: true);
+        Controls.Add(btnSaveClose);
         Controls.Add(grid);
         Load += (_, _) => LoadRows();
     }
 
-    private void AddParcel()
+    private void AddParcel(bool closeAfterSave)
     {
         if (!PermissionMatrix.CanEditParcels)
         {
@@ -64,15 +67,30 @@ public sealed class ParcelForm : Form
         txtOwner.Clear();
         txtPhone.Clear();
         LoadRows();
+        if (closeAfterSave)
+        {
+            Close();
+        }
     }
 
     private void LoadRows()
     {
         using var conn = Database.GetConnection();
         conn.Open();
-        var adapter = new SQLiteDataAdapter("SELECT Id, ParcelNo AS Parsel, OwnerName AS Uye, Phone AS Telefon, Debt AS Borc FROM Parcels ORDER BY ParcelNo", conn);
+        var adapter = new SQLiteDataAdapter("SELECT Id, ParcelNo AS Parsel, OwnerName AS Uye, Phone AS Telefon FROM Parcels ORDER BY ParcelNo", conn);
         var table = new DataTable();
         adapter.Fill(table);
+        table.Columns.Add("GuncelBorc", typeof(decimal));
+
+        foreach (DataRow row in table.Rows)
+        {
+            row["GuncelBorc"] = DebtService.CalculateParcelDebt(Convert.ToInt32(row["Id"]), conn);
+        }
+
         grid.DataSource = table;
+        if (grid.Columns["Id"] is not null)
+        {
+            grid.Columns["Id"].Visible = false;
+        }
     }
 }
