@@ -11,6 +11,7 @@ public sealed class AidatForm : Form
     private readonly NumericUpDown numAmount = new() { Left = 130, Top = 60, Width = 120, Maximum = 100000, DecimalPlaces = 2 };
     private readonly DateTimePicker dueDate = new() { Left = 130, Top = 100, Width = 160 };
     private readonly DataGridView grid = new() { Left = 20, Top = 160, Width = 760, Height = 330, ReadOnly = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+    private bool showDeleted;
 
     public AidatForm()
     {
@@ -36,8 +37,21 @@ public sealed class AidatForm : Form
         var btnClose = new Button { Left = 500, Top = 20, Width = 170, Height = 35, Text = "Cik" };
         btnClose.Click += (_, _) => Close();
         Controls.Add(btnClose);
+        var btnDelete = new Button { Left = 500, Top = 65, Width = 80, Height = 35, Text = "Sil" };
+        btnDelete.Click += (_, _) => DeleteSelectedAidat();
+        Controls.Add(btnDelete);
+        var btnShowDeleted = new Button { Left = 590, Top = 65, Width = 120, Height = 35, Text = "Silinenleri Goster" };
+        btnShowDeleted.Click += (_, _) =>
+        {
+            showDeleted = !showDeleted;
+            btnShowDeleted.Text = showDeleted ? "Aktifleri Goster" : "Silinenleri Goster";
+            LoadRows();
+        };
+        Controls.Add(btnShowDeleted);
 
         Controls.Add(grid);
+        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        grid.MultiSelect = false;
         Load += (_, _) =>
         {
             numAmount.Value = SettingsService.GetDecimal("MonthlyAidat", 600);
@@ -61,7 +75,7 @@ public sealed class AidatForm : Form
             conn.Open();
             using var tx = conn.BeginTransaction();
 
-            using var select = new SQLiteCommand("SELECT Id FROM Parcels", conn, tx);
+            using var select = new SQLiteCommand("SELECT Id FROM Parcels WHERE IsDeleted=0", conn, tx);
             using var reader = select.ExecuteReader();
             var parcelIds = new List<int>();
             while (reader.Read())
@@ -72,7 +86,7 @@ public sealed class AidatForm : Form
 
             foreach (var parcelId in parcelIds)
             {
-                using var exists = new SQLiteCommand("SELECT COUNT(*) FROM Aidat WHERE ParcelId=@p AND Period=@period", conn, tx);
+                using var exists = new SQLiteCommand("SELECT COUNT(*) FROM Aidat WHERE ParcelId=@p AND Period=@period AND IsDeleted=0", conn, tx);
                 exists.Parameters.AddWithValue("@p", parcelId);
                 exists.Parameters.AddWithValue("@period", period);
                 if (Convert.ToInt32(exists.ExecuteScalar()) > 0)
@@ -108,15 +122,68 @@ public sealed class AidatForm : Form
         using var conn = Database.GetConnection();
         conn.Open();
         var adapter = new SQLiteDataAdapter("""
-            SELECT p.ParcelNo AS Parsel, p.OwnerName AS Uye, a.Period AS Donem,
+            SELECT a.Id,
+                   p.ParcelNo AS Parsel, p.OwnerName AS Uye, a.Period AS Donem,
                    a.Principal AS AnaPara, a.DueDate AS Vade, a.PaidAmount AS Odenen,
-                   CASE WHEN a.IsPaid = 1 THEN 'Kapandi' ELSE 'Acik' END AS Durum
+                   CASE
+                       WHEN a.IsDeleted = 1 THEN 'Silinmis'
+                       WHEN a.IsPaid = 1 THEN 'Kapandi'
+                       ELSE 'Acik'
+                   END AS Durum
             FROM Aidat a
             JOIN Parcels p ON p.Id = a.ParcelId
+            WHERE a.IsDeleted = @deleted
+              AND p.IsDeleted = 0
             ORDER BY a.DueDate DESC, p.ParcelNo
             """, conn);
+        adapter.SelectCommand.Parameters.AddWithValue("@deleted", showDeleted ? 1 : 0);
         var table = new DataTable();
         adapter.Fill(table);
         grid.DataSource = table;
+        if (grid.Columns["Id"] is not null)
+        {
+            grid.Columns["Id"].Visible = false;
+        }
+        grid.ClearSelection();
+    }
+
+    private void DeleteSelectedAidat()
+    {
+        if (!PermissionMatrix.CanDeleteData)
+        {
+            MessageBox.Show("Silme islemi icin admin yetkisi gerekir.");
+            return;
+        }
+
+        if (grid.CurrentRow?.DataBoundItem is not DataRowView row)
+        {
+            MessageBox.Show("Silmek icin listeden bir aidat secin.");
+            return;
+        }
+
+        if (row["Durum"].ToString() == "Silinmis")
+        {
+            MessageBox.Show("Bu kayit zaten silinenlerde.");
+            return;
+        }
+
+        var result = MessageBox.Show(
+            "Secili aidat kaydi silinenlere tasinsin mi?",
+            "Silme Onayi",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+        if (result != DialogResult.Yes)
+        {
+            return;
+        }
+
+        using var conn = Database.GetConnection();
+        conn.Open();
+        using var cmd = new SQLiteCommand("UPDATE Aidat SET IsDeleted=1 WHERE Id=@id", conn);
+        cmd.Parameters.AddWithValue("@id", Convert.ToInt32(row["Id"]));
+        cmd.ExecuteNonQuery();
+
+        LogService.Log("Aidat silinenlere tasindi: " + row["Donem"]);
+        LoadRows();
     }
 }

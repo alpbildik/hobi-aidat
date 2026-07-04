@@ -29,7 +29,7 @@ public sealed class DashboardChart : Form
         conn.Open();
         var parcelCount = Scalar(conn, "SELECT COUNT(*) FROM Parcels");
         var totalDebt = DebtService.CalculateTotalDebt(conn);
-        var totalPayment = Scalar(conn, "SELECT IFNULL(SUM(Amount),0) FROM Payments");
+        var totalPayment = Scalar(conn, "SELECT IFNULL(SUM(Amount),0) FROM Payments WHERE IsDeleted=0");
 
         return $"Toplam Parsel: {parcelCount}\n\nToplam Borc: {totalDebt:0.00} TL\n\nToplam Tahsilat: {totalPayment:0.00} TL";
     }

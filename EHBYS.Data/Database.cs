@@ -42,7 +42,8 @@ public static class Database
                 ParcelNo TEXT NOT NULL UNIQUE,
                 OwnerName TEXT NOT NULL,
                 Phone TEXT,
-                Debt REAL NOT NULL DEFAULT 0
+                Debt REAL NOT NULL DEFAULT 0,
+                IsDeleted INTEGER NOT NULL DEFAULT 0
             );
             """);
 
@@ -54,6 +55,7 @@ public static class Database
                 TcNo TEXT,
                 Address TEXT,
                 Phone TEXT,
+                IsDeleted INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(ParcelId) REFERENCES Parcels(Id)
             );
             """);
@@ -67,6 +69,7 @@ public static class Database
                 DueDate TEXT NOT NULL,
                 PaidAmount REAL NOT NULL DEFAULT 0,
                 IsPaid INTEGER NOT NULL DEFAULT 0,
+                IsDeleted INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(ParcelId) REFERENCES Parcels(Id)
             );
             """);
@@ -79,7 +82,20 @@ public static class Database
                 Date TEXT NOT NULL,
                 Method TEXT NOT NULL,
                 Note TEXT,
+                IsDeleted INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(ParcelId) REFERENCES Parcels(Id)
+            );
+            """);
+
+        Execute(conn, """
+            CREATE TABLE IF NOT EXISTS PaymentAllocations(
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                PaymentId INTEGER NOT NULL,
+                AidatId INTEGER NOT NULL,
+                PrincipalApplied REAL NOT NULL,
+                DebtApplied REAL NOT NULL,
+                FOREIGN KEY(PaymentId) REFERENCES Payments(Id),
+                FOREIGN KEY(AidatId) REFERENCES Aidat(Id)
             );
             """);
 
@@ -102,6 +118,11 @@ public static class Database
         Execute(conn, "INSERT OR IGNORE INTO Settings(Key, Value) VALUES('MonthlyAidat', '600');");
         Execute(conn, "INSERT OR IGNORE INTO Settings(Key, Value) VALUES('MonthlyInterestRate', '0.07');");
         Execute(conn, "INSERT OR IGNORE INTO Settings(Key, Value) VALUES('DueDay', '20');");
+
+        EnsureColumn(conn, "Parcels", "IsDeleted", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn(conn, "Members", "IsDeleted", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn(conn, "Aidat", "IsDeleted", "INTEGER NOT NULL DEFAULT 0");
+        EnsureColumn(conn, "Payments", "IsDeleted", "INTEGER NOT NULL DEFAULT 0");
     }
 
     private static void Execute(SQLiteConnection conn, string sql)
@@ -115,5 +136,21 @@ public static class Database
         Execute(conn, "PRAGMA journal_mode=WAL;");
         Execute(conn, "PRAGMA busy_timeout=5000;");
         Execute(conn, "PRAGMA foreign_keys=ON;");
+    }
+
+    private static void EnsureColumn(SQLiteConnection conn, string tableName, string columnName, string definition)
+    {
+        using var check = new SQLiteCommand($"PRAGMA table_info({tableName});", conn);
+        using var reader = check.ExecuteReader();
+        while (reader.Read())
+        {
+            if (string.Equals(reader["name"].ToString(), columnName, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+        reader.Close();
+
+        Execute(conn, $"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition};");
     }
 }

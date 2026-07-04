@@ -31,7 +31,7 @@ public sealed class ReportForm : Form
         conn.Open();
         var parcelCount = Scalar(conn, "SELECT COUNT(*) FROM Parcels");
         var totalDebt = DebtService.CalculateTotalDebt(conn);
-        var totalPayment = Scalar(conn, "SELECT IFNULL(SUM(Amount),0) FROM Payments");
+        var totalPayment = Scalar(conn, "SELECT IFNULL(SUM(Amount),0) FROM Payments WHERE IsDeleted=0");
 
         txtReport.Text =
             "EHBYS RAPOR OZETI\r\n" +

@@ -13,14 +13,15 @@ public sealed class ParcelForm : Form
     private readonly TextBox txtPhone = new() { Left = 610, Top = 20, Width = 160 };
     private readonly TextBox txtTcNo = new() { Left = 90, Top = 55, Width = 120 };
     private readonly TextBox txtAddress = new() { Left = 300, Top = 55, Width = 320 };
-    private readonly DataGridView grid = new() { Left = 20, Top = 100, Width = 880, Height = 430, ReadOnly = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+    private readonly DataGridView grid = new() { Left = 20, Top = 100, Width = 980, Height = 430, ReadOnly = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
     private int? editingParcelId;
     private bool loadingRows;
+    private bool showDeleted;
 
     public ParcelForm()
     {
         Text = "Parsel ve Uye Yonetimi";
-        Width = 950;
+        Width = 1050;
         Height = 610;
         StartPosition = FormStartPosition.CenterParent;
 
@@ -35,15 +36,27 @@ public sealed class ParcelForm : Form
         Controls.Add(new Label { Left = 230, Top = 59, Width = 70, Text = "Adres" });
         Controls.Add(txtAddress);
 
-        var btnNew = new Button { Left = 820, Top = 18, Width = 80, Text = "Yeni" };
+        var btnNew = new Button { Left = 880, Top = 18, Width = 120, Text = "Yeni" };
         btnNew.Click += (_, _) => ClearForm();
         Controls.Add(btnNew);
-        var btnAdd = new Button { Left = 690, Top = 53, Width = 100, Text = "Kaydet" };
+        var btnAdd = new Button { Left = 790, Top = 53, Width = 100, Text = "Kaydet" };
         btnAdd.Click += (_, _) => SaveParcel();
         Controls.Add(btnAdd);
-        var btnClose = new Button { Left = 800, Top = 53, Width = 100, Text = "Cik" };
+        var btnClose = new Button { Left = 900, Top = 53, Width = 100, Text = "Cik" };
         btnClose.Click += (_, _) => Close();
         Controls.Add(btnClose);
+        var btnDelete = new Button { Left = 790, Top = 18, Width = 80, Text = "Sil" };
+        btnDelete.Click += (_, _) => DeleteSelectedParcel();
+        Controls.Add(btnDelete);
+        var btnShowDeleted = new Button { Left = 630, Top = 53, Width = 150, Text = "Silinenleri Goster" };
+        btnShowDeleted.Click += (_, _) =>
+        {
+            showDeleted = !showDeleted;
+            btnShowDeleted.Text = showDeleted ? "Aktifleri Goster" : "Silinenleri Goster";
+            ClearForm();
+            LoadRows();
+        };
+        Controls.Add(btnShowDeleted);
         Controls.Add(grid);
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         grid.MultiSelect = false;
@@ -140,13 +153,16 @@ public sealed class ParcelForm : Form
                    p.OwnerName AS Uye,
                    IFNULL(p.Phone, '') AS Telefon,
                    IFNULL(m.TcNo, '') AS TCNo,
-                   IFNULL(m.Address, '') AS Adres
+                   IFNULL(m.Address, '') AS Adres,
+                   CASE WHEN p.IsDeleted = 1 THEN 'Silinmis' ELSE 'Aktif' END AS Durum
             FROM Parcels p
             LEFT JOIN Members m ON m.Id = (
                 SELECT Id FROM Members WHERE ParcelId = p.Id ORDER BY Id DESC LIMIT 1
             )
+            WHERE p.IsDeleted = @deleted
             ORDER BY p.ParcelNo
             """, conn);
+        adapter.SelectCommand.Parameters.AddWithValue("@deleted", showDeleted ? 1 : 0);
         var table = new DataTable();
         adapter.Fill(table);
         table.Columns.Add("GuncelBorc", typeof(decimal));
@@ -198,5 +214,56 @@ public sealed class ParcelForm : Form
         update.Parameters.AddWithValue("@phone", phone);
         update.Parameters.AddWithValue("@id", Convert.ToInt32(existingId));
         update.ExecuteNonQuery();
+    }
+
+    private void DeleteSelectedParcel()
+    {
+        if (!PermissionMatrix.CanDeleteData)
+        {
+            MessageBox.Show("Silme islemi icin admin yetkisi gerekir.");
+            return;
+        }
+
+        if (!editingParcelId.HasValue)
+        {
+            MessageBox.Show("Silmek icin listeden bir kayit secin.");
+            return;
+        }
+
+        if (showDeleted)
+        {
+            MessageBox.Show("Bu kayit zaten silinenlerde.");
+            return;
+        }
+
+        var result = MessageBox.Show(
+            "Secili parsel ve uye kaydi silinenlere tasinsin mi?",
+            "Silme Onayi",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+        if (result != DialogResult.Yes)
+        {
+            return;
+        }
+
+        using (var conn = Database.GetConnection())
+        {
+            conn.Open();
+            using var tx = conn.BeginTransaction();
+
+            using var parcel = new SQLiteCommand("UPDATE Parcels SET IsDeleted=1 WHERE Id=@id", conn, tx);
+            parcel.Parameters.AddWithValue("@id", editingParcelId.Value);
+            parcel.ExecuteNonQuery();
+
+            using var member = new SQLiteCommand("UPDATE Members SET IsDeleted=1 WHERE ParcelId=@id", conn, tx);
+            member.Parameters.AddWithValue("@id", editingParcelId.Value);
+            member.ExecuteNonQuery();
+
+            tx.Commit();
+        }
+
+        LogService.Log("Parsel silinenlere tasindi: " + txtParcel.Text);
+        ClearForm();
+        LoadRows();
     }
 }

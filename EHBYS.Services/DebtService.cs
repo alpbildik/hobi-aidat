@@ -21,7 +21,7 @@ public static class DebtService
             using var cmd = new SQLiteCommand("""
                 SELECT Principal, PaidAmount, DueDate
                 FROM Aidat
-                WHERE ParcelId=@p AND IsPaid=0
+                WHERE ParcelId=@p AND IsPaid=0 AND IsDeleted=0
                 """, conn);
             cmd.Parameters.AddWithValue("@p", parcelId);
 
@@ -57,7 +57,7 @@ public static class DebtService
 
         try
         {
-            using var cmd = new SQLiteCommand("SELECT Id FROM Parcels", conn);
+            using var cmd = new SQLiteCommand("SELECT Id FROM Parcels WHERE IsDeleted=0", conn);
             using var reader = cmd.ExecuteReader();
             var parcelIds = new List<int>();
             while (reader.Read())
