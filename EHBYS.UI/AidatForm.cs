@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.SQLite;
 using EHBYS.Data;
+using EHBYS.Models;
 using EHBYS.Services;
 
 namespace EHBYS.UI;
