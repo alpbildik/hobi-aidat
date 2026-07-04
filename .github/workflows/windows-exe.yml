@@ -1,0 +1,57 @@
+name: Windows EXE Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-windows:
+    name: Build Windows executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\EHBYS.sln
+
+      - name: Build
+        run: dotnet build .\EHBYS.sln -c Release --no-restore
+
+      - name: Publish portable EXE
+        run: >
+          dotnet publish .\EHBYS.UI\EHBYS.UI.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o .\publish\EHBYS
+
+      - name: Upload portable EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EHBYS-portable-win-x64
+          path: publish/EHBYS/**
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build Setup.exe
+        run: iscc .\installer\EHBYS.iss
+
+      - name: Upload Setup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EHBYS-setup-win-x64
+          path: publish/Setup/**
