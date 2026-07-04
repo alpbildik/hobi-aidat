@@ -9,6 +9,8 @@ public sealed class DebtForm : Form
 {
     private readonly DataGridView grid = new() { Dock = DockStyle.Fill, ReadOnly = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
 
+    private sealed record DebtRow(string Parcel, string Owner, string Phone, decimal Total);
+
     public DebtForm()
     {
         Text = "Borc Listesi";
@@ -38,19 +40,22 @@ public sealed class DebtForm : Form
             ORDER BY p.ParcelNo
             """, conn);
         using var reader = cmd.ExecuteReader();
-        var totals = new Dictionary<int, (string Parcel, string Owner, string Phone, decimal Total)>();
+        var totals = new Dictionary<int, DebtRow>();
         while (reader.Read())
         {
             var id = reader.GetInt32(0);
             var row = totals.TryGetValue(id, out var existing)
                 ? existing
-                : (reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? "" : reader.GetString(3), 0m);
+                : new DebtRow(reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? "" : reader.GetString(3), 0m);
 
             if (!reader.IsDBNull(4) && reader.GetInt32(7) == 0)
             {
                 var principal = Convert.ToDecimal(reader.GetDouble(4)) - Convert.ToDecimal(reader.GetDouble(5));
                 var dueDate = DateTime.Parse(reader.GetString(6));
-                row.Total += InterestService.CalculateCompoundDebt(Math.Max(0, principal), dueDate, DateTime.Today, rate);
+                row = row with
+                {
+                    Total = row.Total + InterestService.CalculateCompoundDebt(Math.Max(0, principal), dueDate, DateTime.Today, rate)
+                };
             }
 
             totals[id] = row;
