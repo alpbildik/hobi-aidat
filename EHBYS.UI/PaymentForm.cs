@@ -10,29 +10,32 @@ public sealed class PaymentForm : Form
 {
     private readonly ComboBox cmbParcel = new() { Left = 110, Top = 20, Width = 260, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly NumericUpDown numAmount = new() { Left = 110, Top = 60, Width = 120, Maximum = 1_000_000, DecimalPlaces = 2 };
-    private readonly TextBox txtMethod = new() { Left = 110, Top = 100, Width = 160, Text = "Nakit" };
-    private readonly TextBox txtNote = new() { Left = 110, Top = 140, Width = 260 };
+    private readonly DateTimePicker paymentDate = new() { Left = 110, Top = 100, Width = 160 };
+    private readonly TextBox txtMethod = new() { Left = 110, Top = 140, Width = 160, Text = "Nakit" };
+    private readonly TextBox txtNote = new() { Left = 110, Top = 180, Width = 260 };
 
     public PaymentForm()
     {
         Text = "Tahsilat";
         Width = 430;
-        Height = 260;
+        Height = 300;
         StartPosition = FormStartPosition.CenterParent;
 
         Controls.Add(new Label { Left = 20, Top = 24, Width = 90, Text = "Parsel" });
         Controls.Add(cmbParcel);
         Controls.Add(new Label { Left = 20, Top = 64, Width = 90, Text = "Tutar" });
         Controls.Add(numAmount);
-        Controls.Add(new Label { Left = 20, Top = 104, Width = 90, Text = "Yontem" });
+        Controls.Add(new Label { Left = 20, Top = 104, Width = 90, Text = "Tarih" });
+        Controls.Add(paymentDate);
+        Controls.Add(new Label { Left = 20, Top = 144, Width = 90, Text = "Yontem" });
         Controls.Add(txtMethod);
-        Controls.Add(new Label { Left = 20, Top = 144, Width = 90, Text = "Not" });
+        Controls.Add(new Label { Left = 20, Top = 184, Width = 90, Text = "Not" });
         Controls.Add(txtNote);
 
-        var btnSave = new Button { Left = 110, Top = 180, Width = 125, Text = "Kaydet" };
+        var btnSave = new Button { Left = 110, Top = 220, Width = 125, Text = "Kaydet" };
         btnSave.Click += (_, _) => SavePayment(closeAfterSave: false);
         Controls.Add(btnSave);
-        var btnClose = new Button { Left = 245, Top = 180, Width = 125, Text = "Cik" };
+        var btnClose = new Button { Left = 245, Top = 220, Width = 125, Text = "Cik" };
         btnClose.Click += (_, _) => Close();
         Controls.Add(btnClose);
         Load += (_, _) => LoadParcels();
@@ -66,6 +69,7 @@ public sealed class PaymentForm : Form
 
         var parcelId = Convert.ToInt32(cmbParcel.SelectedValue);
         var amount = numAmount.Value;
+        var paidAt = paymentDate.Value.Date;
         using (var conn = Database.GetConnection())
         {
             conn.Open();
@@ -74,12 +78,12 @@ public sealed class PaymentForm : Form
             using var insert = new SQLiteCommand("INSERT INTO Payments(ParcelId, Amount, Date, Method, Note) VALUES(@p, @a, @d, @m, @n)", conn, tx);
             insert.Parameters.AddWithValue("@p", parcelId);
             insert.Parameters.AddWithValue("@a", amount);
-            insert.Parameters.AddWithValue("@d", DateTime.Today.ToString("yyyy-MM-dd"));
+            insert.Parameters.AddWithValue("@d", paidAt.ToString("yyyy-MM-dd"));
             insert.Parameters.AddWithValue("@m", txtMethod.Text.Trim());
             insert.Parameters.AddWithValue("@n", txtNote.Text.Trim());
             insert.ExecuteNonQuery();
 
-            AllocatePayment(conn, tx, parcelId, amount);
+            AllocatePayment(conn, tx, parcelId, amount, paidAt);
 
             tx.Commit();
         }
@@ -97,11 +101,11 @@ public sealed class PaymentForm : Form
         }
     }
 
-    private static void AllocatePayment(SQLiteConnection conn, SQLiteTransaction tx, int parcelId, decimal amount)
+    private static void AllocatePayment(SQLiteConnection conn, SQLiteTransaction tx, int parcelId, decimal amount, DateTime paidAt)
     {
         var remaining = amount;
         using var select = new SQLiteCommand("""
-            SELECT Id, Principal, PaidAmount
+            SELECT Id, Principal, PaidAmount, DueDate
             FROM Aidat
             WHERE ParcelId=@p AND IsPaid=0
             ORDER BY DueDate, Id
@@ -109,13 +113,14 @@ public sealed class PaymentForm : Form
         select.Parameters.AddWithValue("@p", parcelId);
 
         using var reader = select.ExecuteReader();
-        var rows = new List<(int Id, decimal Principal, decimal Paid)>();
+        var rows = new List<(int Id, decimal Principal, decimal Paid, DateTime DueDate)>();
         while (reader.Read())
         {
-            rows.Add((reader.GetInt32(0), Convert.ToDecimal(reader.GetDouble(1)), Convert.ToDecimal(reader.GetDouble(2))));
+            rows.Add((reader.GetInt32(0), Convert.ToDecimal(reader.GetDouble(1)), Convert.ToDecimal(reader.GetDouble(2)), DateTime.Parse(reader.GetString(3))));
         }
         reader.Close();
 
+        var rate = SettingsService.GetDecimal("MonthlyInterestRate", 0.07m);
         foreach (var row in rows)
         {
             if (remaining <= 0)
@@ -123,10 +128,19 @@ public sealed class PaymentForm : Form
                 break;
             }
 
-            var open = Math.Max(0, row.Principal - row.Paid);
-            var applied = Math.Min(open, remaining);
-            var newPaid = row.Paid + applied;
-            remaining -= applied;
+            var openPrincipal = Math.Max(0, row.Principal - row.Paid);
+            if (openPrincipal <= 0)
+            {
+                continue;
+            }
+
+            var debtAtPaymentDate = InterestService.CalculateCompoundDebt(openPrincipal, row.DueDate, paidAt, rate);
+            var appliedDebt = Math.Min(debtAtPaymentDate, remaining);
+            var principalReduction = debtAtPaymentDate <= 0
+                ? 0
+                : Math.Min(openPrincipal, openPrincipal * appliedDebt / debtAtPaymentDate);
+            var newPaid = row.Paid + principalReduction;
+            remaining -= appliedDebt;
 
             using var update = new SQLiteCommand("""
                 UPDATE Aidat
@@ -134,7 +148,7 @@ public sealed class PaymentForm : Form
                 WHERE Id=@id
                 """, conn, tx);
             update.Parameters.AddWithValue("@paid", newPaid);
-            update.Parameters.AddWithValue("@closed", newPaid >= row.Principal ? 1 : 0);
+            update.Parameters.AddWithValue("@closed", newPaid >= row.Principal - 0.01m ? 1 : 0);
             update.Parameters.AddWithValue("@id", row.Id);
             update.ExecuteNonQuery();
         }
