@@ -32,9 +32,9 @@ public sealed class PaymentForm : Form
         var btnSave = new Button { Left = 110, Top = 180, Width = 125, Text = "Kaydet" };
         btnSave.Click += (_, _) => SavePayment(closeAfterSave: false);
         Controls.Add(btnSave);
-        var btnSaveClose = new Button { Left = 245, Top = 180, Width = 125, Text = "Kaydet ve Cik" };
-        btnSaveClose.Click += (_, _) => SavePayment(closeAfterSave: true);
-        Controls.Add(btnSaveClose);
+        var btnClose = new Button { Left = 245, Top = 180, Width = 125, Text = "Cik" };
+        btnClose.Click += (_, _) => Close();
+        Controls.Add(btnClose);
         Load += (_, _) => LoadParcels();
     }
 

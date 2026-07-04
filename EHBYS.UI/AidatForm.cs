@@ -33,9 +33,9 @@ public sealed class AidatForm : Form
         var btnRefresh = new Button { Left = 310, Top = 65, Width = 170, Height = 35, Text = "Listeyi Yenile" };
         btnRefresh.Click += (_, _) => LoadRows();
         Controls.Add(btnRefresh);
-        var btnSaveClose = new Button { Left = 500, Top = 20, Width = 170, Height = 35, Text = "Kaydet ve Cik" };
-        btnSaveClose.Click += (_, _) => CreateMonthlyDues(closeAfterSave: true);
-        Controls.Add(btnSaveClose);
+        var btnClose = new Button { Left = 500, Top = 20, Width = 170, Height = 35, Text = "Cik" };
+        btnClose.Click += (_, _) => Close();
+        Controls.Add(btnClose);
 
         Controls.Add(grid);
         Load += (_, _) =>

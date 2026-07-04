@@ -26,9 +26,9 @@ public sealed class SettingsForm : Form
         var btnSave = new Button { Left = 70, Top = 145, Width = 100, Text = "Kaydet" };
         btnSave.Click += (_, _) => Save(closeAfterSave: false);
         Controls.Add(btnSave);
-        var btnSaveClose = new Button { Left = 180, Top = 145, Width = 120, Text = "Kaydet ve Cik" };
-        btnSaveClose.Click += (_, _) => Save(closeAfterSave: true);
-        Controls.Add(btnSaveClose);
+        var btnClose = new Button { Left = 180, Top = 145, Width = 120, Text = "Cik" };
+        btnClose.Click += (_, _) => Close();
+        Controls.Add(btnClose);
         Load += (_, _) => LoadSettings();
     }
 
