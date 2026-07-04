@@ -48,15 +48,18 @@ public sealed class ParcelForm : Form
             return;
         }
 
-        using var conn = Database.GetConnection();
-        conn.Open();
-        using var cmd = new SQLiteCommand("INSERT INTO Parcels(ParcelNo, OwnerName, Phone) VALUES(@p, @o, @t)", conn);
-        cmd.Parameters.AddWithValue("@p", txtParcel.Text.Trim());
-        cmd.Parameters.AddWithValue("@o", txtOwner.Text.Trim());
-        cmd.Parameters.AddWithValue("@t", txtPhone.Text.Trim());
-        cmd.ExecuteNonQuery();
+        var parcelNo = txtParcel.Text.Trim();
+        using (var conn = Database.GetConnection())
+        {
+            conn.Open();
+            using var cmd = new SQLiteCommand("INSERT INTO Parcels(ParcelNo, OwnerName, Phone) VALUES(@p, @o, @t)", conn);
+            cmd.Parameters.AddWithValue("@p", parcelNo);
+            cmd.Parameters.AddWithValue("@o", txtOwner.Text.Trim());
+            cmd.Parameters.AddWithValue("@t", txtPhone.Text.Trim());
+            cmd.ExecuteNonQuery();
+        }
 
-        LogService.Log("Parsel eklendi: " + txtParcel.Text);
+        LogService.Log("Parsel eklendi: " + parcelNo);
         txtParcel.Clear();
         txtOwner.Clear();
         txtPhone.Clear();

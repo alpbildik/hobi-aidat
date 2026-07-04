@@ -11,7 +11,7 @@ public static class Database
 
     public static SQLiteConnection GetConnection()
     {
-        return new SQLiteConnection($"Data Source={DatabasePath};Version=3;");
+        return new SQLiteConnection($"Data Source={DatabasePath};Version=3;Default Timeout=30;BusyTimeout=5000;Pooling=True;");
     }
 
     public static void Initialize()
@@ -25,6 +25,7 @@ public static class Database
 
         using var conn = GetConnection();
         conn.Open();
+        Configure(conn);
 
         Execute(conn, """
             CREATE TABLE IF NOT EXISTS Users(
@@ -107,5 +108,12 @@ public static class Database
     {
         using var cmd = new SQLiteCommand(sql, conn);
         cmd.ExecuteNonQuery();
+    }
+
+    private static void Configure(SQLiteConnection conn)
+    {
+        Execute(conn, "PRAGMA journal_mode=WAL;");
+        Execute(conn, "PRAGMA busy_timeout=5000;");
+        Execute(conn, "PRAGMA foreign_keys=ON;");
     }
 }

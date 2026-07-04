@@ -52,42 +52,46 @@ public sealed class AidatForm : Form
             return;
         }
 
-        using var conn = Database.GetConnection();
-        conn.Open();
-        using var tx = conn.BeginTransaction();
-
-        using var select = new SQLiteCommand("SELECT Id FROM Parcels", conn, tx);
-        using var reader = select.ExecuteReader();
-        var parcelIds = new List<int>();
-        while (reader.Read())
+        var period = txtPeriod.Text.Trim();
+        using (var conn = Database.GetConnection())
         {
-            parcelIds.Add(reader.GetInt32(0));
-        }
-        reader.Close();
+            conn.Open();
+            using var tx = conn.BeginTransaction();
 
-        foreach (var parcelId in parcelIds)
-        {
-            using var exists = new SQLiteCommand("SELECT COUNT(*) FROM Aidat WHERE ParcelId=@p AND Period=@period", conn, tx);
-            exists.Parameters.AddWithValue("@p", parcelId);
-            exists.Parameters.AddWithValue("@period", txtPeriod.Text.Trim());
-            if (Convert.ToInt32(exists.ExecuteScalar()) > 0)
+            using var select = new SQLiteCommand("SELECT Id FROM Parcels", conn, tx);
+            using var reader = select.ExecuteReader();
+            var parcelIds = new List<int>();
+            while (reader.Read())
             {
-                continue;
+                parcelIds.Add(reader.GetInt32(0));
+            }
+            reader.Close();
+
+            foreach (var parcelId in parcelIds)
+            {
+                using var exists = new SQLiteCommand("SELECT COUNT(*) FROM Aidat WHERE ParcelId=@p AND Period=@period", conn, tx);
+                exists.Parameters.AddWithValue("@p", parcelId);
+                exists.Parameters.AddWithValue("@period", period);
+                if (Convert.ToInt32(exists.ExecuteScalar()) > 0)
+                {
+                    continue;
+                }
+
+                using var insert = new SQLiteCommand("""
+                    INSERT INTO Aidat(ParcelId, Period, Principal, DueDate)
+                    VALUES(@p, @period, @principal, @due)
+                    """, conn, tx);
+                insert.Parameters.AddWithValue("@p", parcelId);
+                insert.Parameters.AddWithValue("@period", period);
+                insert.Parameters.AddWithValue("@principal", numAmount.Value);
+                insert.Parameters.AddWithValue("@due", dueDate.Value.ToString("yyyy-MM-dd"));
+                insert.ExecuteNonQuery();
             }
 
-            using var insert = new SQLiteCommand("""
-                INSERT INTO Aidat(ParcelId, Period, Principal, DueDate)
-                VALUES(@p, @period, @principal, @due)
-                """, conn, tx);
-            insert.Parameters.AddWithValue("@p", parcelId);
-            insert.Parameters.AddWithValue("@period", txtPeriod.Text.Trim());
-            insert.Parameters.AddWithValue("@principal", numAmount.Value);
-            insert.Parameters.AddWithValue("@due", dueDate.Value.ToString("yyyy-MM-dd"));
-            insert.ExecuteNonQuery();
+            tx.Commit();
         }
 
-        tx.Commit();
-        LogService.Log("Aidat tahakkuku olusturuldu: " + txtPeriod.Text);
+        LogService.Log("Aidat tahakkuku olusturuldu: " + period);
         MessageBox.Show("Aidat tahakkuku olusturuldu.");
         LoadRows();
     }

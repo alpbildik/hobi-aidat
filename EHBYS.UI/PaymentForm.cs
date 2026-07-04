@@ -62,22 +62,26 @@ public sealed class PaymentForm : Form
         }
 
         var parcelId = Convert.ToInt32(cmbParcel.SelectedValue);
-        using var conn = Database.GetConnection();
-        conn.Open();
-        using var tx = conn.BeginTransaction();
+        var amount = numAmount.Value;
+        using (var conn = Database.GetConnection())
+        {
+            conn.Open();
+            using var tx = conn.BeginTransaction();
 
-        using var insert = new SQLiteCommand("INSERT INTO Payments(ParcelId, Amount, Date, Method, Note) VALUES(@p, @a, @d, @m, @n)", conn, tx);
-        insert.Parameters.AddWithValue("@p", parcelId);
-        insert.Parameters.AddWithValue("@a", numAmount.Value);
-        insert.Parameters.AddWithValue("@d", DateTime.Today.ToString("yyyy-MM-dd"));
-        insert.Parameters.AddWithValue("@m", txtMethod.Text.Trim());
-        insert.Parameters.AddWithValue("@n", txtNote.Text.Trim());
-        insert.ExecuteNonQuery();
+            using var insert = new SQLiteCommand("INSERT INTO Payments(ParcelId, Amount, Date, Method, Note) VALUES(@p, @a, @d, @m, @n)", conn, tx);
+            insert.Parameters.AddWithValue("@p", parcelId);
+            insert.Parameters.AddWithValue("@a", amount);
+            insert.Parameters.AddWithValue("@d", DateTime.Today.ToString("yyyy-MM-dd"));
+            insert.Parameters.AddWithValue("@m", txtMethod.Text.Trim());
+            insert.Parameters.AddWithValue("@n", txtNote.Text.Trim());
+            insert.ExecuteNonQuery();
 
-        AllocatePayment(conn, tx, parcelId, numAmount.Value);
+            AllocatePayment(conn, tx, parcelId, amount);
 
-        tx.Commit();
-        LogService.Log("Tahsilat kaydedildi: " + numAmount.Value + " TL");
+            tx.Commit();
+        }
+
+        LogService.Log("Tahsilat kaydedildi: " + amount + " TL");
         MessageBox.Show("Tahsilat kaydedildi.");
         Close();
     }

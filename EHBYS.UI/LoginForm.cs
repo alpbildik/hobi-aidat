@@ -32,27 +32,35 @@ public sealed class LoginForm : Form
 
     private void Login()
     {
-        using var conn = Database.GetConnection();
-        conn.Open();
+        string username;
+        UserRole role;
 
-        using var cmd = new SQLiteCommand("SELECT Username, Role FROM Users WHERE Username=@u AND Password=@p", conn);
-        cmd.Parameters.AddWithValue("@u", txtUser.Text.Trim());
-        cmd.Parameters.AddWithValue("@p", txtPassword.Text);
-
-        using var reader = cmd.ExecuteReader();
-        if (!reader.Read())
         {
-            MessageBox.Show("Kullanici adi veya sifre hatali.", "EHBYS", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
+            using var conn = Database.GetConnection();
+            conn.Open();
+
+            using var cmd = new SQLiteCommand("SELECT Username, Role FROM Users WHERE Username=@u AND Password=@p", conn);
+            cmd.Parameters.AddWithValue("@u", txtUser.Text.Trim());
+            cmd.Parameters.AddWithValue("@p", txtPassword.Text);
+
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read())
+            {
+                MessageBox.Show("Kullanici adi veya sifre hatali.", "EHBYS", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            username = reader.GetString(0);
+            role = reader.GetString(1).ToLowerInvariant() switch
+            {
+                "admin" => UserRole.Admin,
+                "muhasebe" => UserRole.Muhasebe,
+                _ => UserRole.Kullanici
+            };
         }
 
-        Session.Username = reader.GetString(0);
-        Session.Role = reader.GetString(1).ToLowerInvariant() switch
-        {
-            "admin" => UserRole.Admin,
-            "muhasebe" => UserRole.Muhasebe,
-            _ => UserRole.Kullanici
-        };
+        Session.Username = username;
+        Session.Role = role;
 
         LogService.Log("Kullanici giris yapti: " + Session.Username);
         Hide();
