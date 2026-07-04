@@ -12,6 +12,7 @@ public sealed class ParcelForm : Form
     private readonly TextBox txtOwner = new() { Left = 300, Top = 20, Width = 220 };
     private readonly TextBox txtPhone = new() { Left = 610, Top = 20, Width = 160 };
     private readonly DataGridView grid = new() { Left = 20, Top = 70, Width = 830, Height = 420, ReadOnly = true, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill };
+    private int? editingParcelId;
 
     public ParcelForm()
     {
@@ -27,17 +28,24 @@ public sealed class ParcelForm : Form
         Controls.Add(new Label { Left = 550, Top = 24, Width = 60, Text = "Telefon" });
         Controls.Add(txtPhone);
 
-        var btnAdd = new Button { Left = 780, Top = 18, Width = 70, Text = "Kaydet" };
-        btnAdd.Click += (_, _) => AddParcel(closeAfterSave: false);
+        var btnNew = new Button { Left = 780, Top = 18, Width = 70, Text = "Yeni" };
+        btnNew.Click += (_, _) => ClearForm();
+        Controls.Add(btnNew);
+        var btnAdd = new Button { Left = 650, Top = 18, Width = 120, Text = "Kaydet" };
+        btnAdd.Click += (_, _) => SaveParcel(closeAfterSave: false);
         Controls.Add(btnAdd);
         var btnSaveClose = new Button { Left = 650, Top = 46, Width = 200, Text = "Kaydet ve Cik" };
-        btnSaveClose.Click += (_, _) => AddParcel(closeAfterSave: true);
+        btnSaveClose.Click += (_, _) => SaveParcel(closeAfterSave: true);
         Controls.Add(btnSaveClose);
         Controls.Add(grid);
+        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        grid.MultiSelect = false;
+        grid.CellDoubleClick += (_, _) => LoadSelectedParcel();
+        grid.SelectionChanged += (_, _) => LoadSelectedParcel();
         Load += (_, _) => LoadRows();
     }
 
-    private void AddParcel(bool closeAfterSave)
+    private void SaveParcel(bool closeAfterSave)
     {
         if (!PermissionMatrix.CanEditParcels)
         {
@@ -52,25 +60,54 @@ public sealed class ParcelForm : Form
         }
 
         var parcelNo = txtParcel.Text.Trim();
+        var owner = txtOwner.Text.Trim();
+        var phone = txtPhone.Text.Trim();
         using (var conn = Database.GetConnection())
         {
             conn.Open();
-            using var cmd = new SQLiteCommand("INSERT INTO Parcels(ParcelNo, OwnerName, Phone) VALUES(@p, @o, @t)", conn);
+            var sql = editingParcelId.HasValue
+                ? "UPDATE Parcels SET ParcelNo=@p, OwnerName=@o, Phone=@t WHERE Id=@id"
+                : "INSERT INTO Parcels(ParcelNo, OwnerName, Phone) VALUES(@p, @o, @t)";
+            using var cmd = new SQLiteCommand(sql, conn);
             cmd.Parameters.AddWithValue("@p", parcelNo);
-            cmd.Parameters.AddWithValue("@o", txtOwner.Text.Trim());
-            cmd.Parameters.AddWithValue("@t", txtPhone.Text.Trim());
+            cmd.Parameters.AddWithValue("@o", owner);
+            cmd.Parameters.AddWithValue("@t", phone);
+            if (editingParcelId.HasValue)
+            {
+                cmd.Parameters.AddWithValue("@id", editingParcelId.Value);
+            }
             cmd.ExecuteNonQuery();
         }
 
-        LogService.Log("Parsel eklendi: " + parcelNo);
-        txtParcel.Clear();
-        txtOwner.Clear();
-        txtPhone.Clear();
+        LogService.Log((editingParcelId.HasValue ? "Parsel guncellendi: " : "Parsel eklendi: ") + parcelNo);
+        ClearForm();
         LoadRows();
         if (closeAfterSave)
         {
             Close();
         }
+    }
+
+    private void ClearForm()
+    {
+        editingParcelId = null;
+        txtParcel.Clear();
+        txtOwner.Clear();
+        txtPhone.Clear();
+        grid.ClearSelection();
+    }
+
+    private void LoadSelectedParcel()
+    {
+        if (grid.CurrentRow?.DataBoundItem is not DataRowView row)
+        {
+            return;
+        }
+
+        editingParcelId = Convert.ToInt32(row["Id"]);
+        txtParcel.Text = row["Parsel"].ToString();
+        txtOwner.Text = row["Uye"].ToString();
+        txtPhone.Text = row["Telefon"].ToString();
     }
 
     private void LoadRows()
@@ -92,5 +129,6 @@ public sealed class ParcelForm : Form
         {
             grid.Columns["Id"].Visible = false;
         }
+        grid.ClearSelection();
     }
 }
